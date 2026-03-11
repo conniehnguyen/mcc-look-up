@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#2563eb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Cashback" />
+  <title>Credit Card Cashback Optimizer</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #dbe3ee;
+      --accent: #2563eb;
+      --success: #166534;
+      --success-bg: #dcfce7;
+      --warn: #92400e;
+      --warn-bg: #fef3c7;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+    h1 { margin: 0 0 8px; font-size: 2rem; }
+    .subtitle, .small-note, .footer-note {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .subtitle { margin: 0 0 10px; }
+    .small-note, .footer-note { font-size: .86rem; }
+    .install-note {
+      margin: 0 0 22px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+    .card h2 { margin-top: 0; margin-bottom: 8px; font-size: 1.2rem; }
+    .card p { margin-top: 0; color: var(--muted); line-height: 1.5; }
+    .form-grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+    input, select, button { width: 100%; font: inherit; }
+    input, select {
+      padding: 11px 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--text);
+    }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-secondary { background: #e2e8f0; color: var(--text); }
+    .btn-outline { background: white; color: var(--accent); border: 1px solid #bfdbfe; }
+    .btn-danger { width: auto; background: transparent; color: #b91c1c; padding: 8px 10px; }
+    .list { display: grid; gap: 12px; margin-top: 16px; }
+    .item {
+      display: block;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .item-header, .item-actions, .category-row, .row-between {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .item-title { font-weight: 700; margin-bottom: 8px; }
+    .meta, .badge-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      font-size: 0.82rem;
+    }
+    .empty {
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      color: var(--muted);
+      background: #fff;
+    }
+    .result, .warning {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 14px;
+      line-height: 1.5;
+    }
+    .result { background: var(--success-bg); color: var(--success); border: 1px solid #86efac; }
+    .warning { background: var(--warn-bg); color: var(--warn); border: 1px solid #fcd34d; }
+    .rankings { margin-top: 14px; display: grid; gap: 10px; }
+    .ranking-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .categories-editor {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 10px;
+    }
+    .category-list { display: grid; gap: 8px; margin-top: 6px; }
+    .category-row {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    .category-name { font-weight: 600; }
+    .inline-form {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 140px 110px;
+      gap: 10px;
+      align-items: end;
+    }
+    .hidden { display: none !important; }
+    .section-spacer { margin-top: 20px; }
+    @media (max-width: 720px) {
+      .item-header, .item-actions, .category-row, .ranking-row, .row-between {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .inline-form { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Credit Card Cashback Optimizer</h1>
+    <p class="subtitle">Save up to 5 credit cards, look up by merchant name or enter a 4-digit POS code (MCC), and see which card gives you the best cashback return.</p>
+    <div class="install-note small-note">Install on iPhone: open this page in Safari, tap Share, then Add to Home Screen. Offline mode works when served over HTTPS or localhost.</div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Your cards</h2>
+        <p>Add up to 5 cards. Each card can have multiple categories, and each category can have its own cashback value.</p>
+        <div class="form-grid">
+          <div>
+            <label for="cardName">Card name</label>
+            <input id="cardName" type="text" placeholder="e.g. Chase Freedom" />
+          </div>
+          <div>
+            <label for="newCategory">Category</label>
+            <select id="newCategory"></select>
+          </div>
+          <div>
+            <label for="newCategoryReward">Cashback % for category</label>
+            <input id="newCategoryReward" type="number" min="0" step="0.1" placeholder="e.g. 5" />
+          </div>
+        </div>
+        <button class="btn-secondary" id="addCategoryDraftBtn">Add category to draft card</button>
+        <div class="small-note">Build a card by adding one or more category/reward pairs, then save the card.</div>
+        <div class="list" id="draftCategoryList"></div>
+        <div class="section-spacer">
+          <button class="btn-primary" id="addCardBtn">Save card</button>
+        </div>
+        <div class="list" id="cardsList"></div>
+      </section>
+
+      <section class="card">
+        <h2>Merchant or POS code lookup</h2>
+        <p>Search by merchant name or enter a 4-digit code. Merchant lookup will try to find a known MCC first, and MCC lookup still works exactly as before.</p>
+        <div class="form-grid">
+          <div>
+            <label for="merchantName">Merchant name</label>
+            <input id="merchantName" type="text" placeholder="e.g. Starbucks, Costco, Safeway" />
+          </div>
+          <div style="display:flex; align-items:end;">
+            <button class="btn-secondary" id="merchantLookupBtn">Find merchant MCC</button>
+          </div>
+        </div>
+        <div id="merchantLookupMessage"></div>
+        <div class="section-spacer">
+          <label for="posCode">POS code</label>
+          <input id="posCode" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 5411" />
+        </div>
+        <div style="margin-top: 14px;">
+          <button class="btn-primary" id="lookupBtn">Look up</button>
+        </div>
+        <div id="lookupMessage"></div>
+        <div id="rankingContainer"></div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top: 20px;">
+      <h2>Custom code-to-category overrides</h2>
+      <p>If a merchant is categorized differently than expected, save your own category mapping for a 4-digit code.</p>
+      <div class="form-grid">
+        <div>
+          <label for="overrideCode">4-digit code</label>
+          <input id="overrideCode" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 5812" />
+        </div>
+        <div>
+          <label for="overrideCategory">Category</label>
+          <select id="overrideCategory"></select>
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button class="btn-secondary" id="saveOverrideBtn">Save override</button>
+        </div>
+      </div>
+      <div class="list" id="overrideList"></div>
+      <p class="footer-note">This app stores your cards and overrides locally on your device.</p>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'cashback-optimizer-pwa-v1';
+    const categories = [
+      'Dining','Groceries','Gas','Travel','Drugstores','Transit','Entertainment','Online shopping','Warehouse clubs','Streaming','Home improvement','General purchases','Utilities','Automotive','Telecom','Business services','Education','Healthcare','Government','Financial services','Home supply','Other'
+    ];
+
+    const merchantToMcc = {
+      'amazon': '5968','amtrak': '4112','apple store': '5732','best buy': '5732','burger king': '5814','chevron': '5541','chipotle': '5812','costco': '5300','cvs': '5912','delta': '4511','disney+': '4899','doordash': '5812','enterprise': '3351','exxon': '5541','hilton': '7011','home depot': '5200','hulu': '4899','ikea': '5712','instacart': '5411','jetblue': '4511','kroger': '5411','lowes': '5200','lyft': '4121','mcdonalds': '5814','netflix': '4899','nike': '5651','panera': '5812','rite aid': '5912','safeway': '5411','shell': '5541','southwest': '4511','spotify': '4899','starbucks': '5814','target': '5310','trader joes': '5411','uber': '4121','uber eats': '5812','united': '4511','walgreens': '5912','walmart': '5310','whole foods': '5411'
+    };
+
+    const mccToCategory = {
+      '4111':'Transit','4112':'Transit','4121':'Transit','4511':'Travel','4899':'Streaming','4900':'Utilities','5172':'Gas','5200':'Home improvement','5211':'Home improvement','5231':'Home improvement','5300':'Warehouse clubs','5310':'Online shopping','5311':'General purchases','5331':'General purchases','5399':'General purchases','5411':'Groceries','5422':'Groceries','5441':'Groceries','5451':'Groceries','5462':'Dining','5499':'Groceries','5541':'Gas','5542':'Gas','5651':'General purchases','5712':'Home supply','5732':'General purchases','5811':'Dining','5812':'Dining','5813':'Dining','5814':'Dining','5815':'Streaming','5816':'Streaming','5912':'Drugstores','5968':'Online shopping','5969':'Online shopping','5999':'General purchases','7011':'Travel','7033':'Travel'
+    };
+
+    const defaultState = {
+      cards: [
+        { id: crypto.randomUUID(), name: 'Blue Card', rewards: { 'Groceries': 3, 'Gas': 2 } },
+        { id: crypto.randomUUID(), name: 'Gold Card', rewards: { 'Dining': 4, 'Travel': 3 } },
+        { id: crypto.randomUUID(), name: 'Everyday Card', rewards: { 'General purchases': 2 } }
+      ],
+      overrides: {}
+    };
+
+    const els = {
+      cardName: document.getElementById('cardName'),
+      newCategory: document.getElementById('newCategory'),
+      newCategoryReward: document.getElementById('newCategoryReward'),
+      addCategoryDraftBtn: document.getElementById('addCategoryDraftBtn'),
+      draftCategoryList: document.getElementById('draftCategoryList'),
+      addCardBtn: document.getElementById('addCardBtn'),
+      cardsList: document.getElementById('cardsList'),
+      merchantName: document.getElementById('merchantName'),
+      merchantLookupBtn: document.getElementById('merchantLookupBtn'),
+      merchantLookupMessage: document.getElementById('merchantLookupMessage'),
+      posCode: document.getElementById('posCode'),
+      lookupBtn: document.getElementById('lookupBtn'),
+      lookupMessage: document.getElementById('lookupMessage'),
+      rankingContainer: document.getElementById('rankingContainer'),
+      overrideCode: document.getElementById('overrideCode'),
+      overrideCategory: document.getElementById('overrideCategory'),
+      saveOverrideBtn: document.getElementById('saveOverrideBtn'),
+      overrideList: document.getElementById('overrideList')
+    };
+
+    let draftRewards = {};
+    let state = loadState();
+
+    function deepClone(value) { return JSON.parse(JSON.stringify(value)); }
+    function escapeHtml(value) { return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    function categoryEntriesFromRewards(rewards) { return Object.keys(rewards).sort().map(category => ({ category, reward: rewards[category] })); }
+    function renderSelectOptions(select) { select.innerHTML = categories.map(cat => '<option value="' + cat + '">' + cat + '</option>').join(''); }
+    function resolveCategory(code) { return state.overrides[code] || mccToCategory[code] || 'Other'; }
+    function normalizeMerchantName(name) { return String(name || '').toLowerCase().replace(/[^a-z0-9+& ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+    function toTitleCase(value) { return String(value).replace(/\b\w/g, char => char.toUpperCase()); }
+    function showMessage(type, html) { els.lookupMessage.innerHTML = '<div class="' + type + '">' + html + '</div>'; }
+    function showMerchantMessage(type, html) { els.merchantLookupMessage.innerHTML = '<div class="' + type + '">' + html + '</div>'; }
+    function clearLookupOutput() { els.lookupMessage.innerHTML = ''; els.merchantLookupMessage.innerHTML = ''; els.rankingContainer.innerHTML = ''; }
+
+    function normalizeCard(card) {
+      if (card && card.rewards && typeof card.rewards === 'object' && Object.keys(card.rewards).length) {
+        const rewards = {};
+        Object.keys(card.rewards).forEach(category => {
+          const value = Number(card.rewards[category]);
+          if (!Number.isNaN(value) && value > 0) rewards[category] = value;
+        });
+        return { id: card.id || crypto.randomUUID(), name: card.name || 'Unnamed Card', rewards: Object.keys(rewards).length ? rewards : { 'Other': 1 } };
+      }
+      return { id: crypto.randomUUID(), name: 'Unnamed Card', rewards: { 'Other': 1 } };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY)
+          || localStorage.getItem('cashback-optimizer-simple-v5')
+          || localStorage.getItem('cashback-optimizer-simple-v4')
+          || localStorage.getItem('cashback-optimizer-simple-v3')
+          || localStorage.getItem('cashback-optimizer-simple-v2')
+          || localStorage.getItem('cashback-optimizer-simple-v1');
+        if (!raw) return deepClone(defaultState);
+        const parsed = JSON.parse(raw);
+        return {
+          cards: Array.isArray(parsed.cards) ? parsed.cards.slice(0, 5).map(normalizeCard) : deepClone(defaultState.cards),
+          overrides: parsed.overrides || {}
+        };
+      } catch {
+        return deepClone(defaultState);
+      }
+    }
+
+    function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+    function findMerchantMatch(input) {
+      const normalized = normalizeMerchantName(input);
+      if (!normalized) return null;
+      if (merchantToMcc[normalized]) return { merchant: normalized, mcc: merchantToMcc[normalized] };
+      for (const key of Object.keys(merchantToMcc)) {
+        if (normalized.includes(key) || key.includes(normalized)) return { merchant: key, mcc: merchantToMcc[key] };
+      }
+      return null;
+    }
+
+    function renderDraftCategories() {
+      const entries = categoryEntriesFromRewards(draftRewards);
+      if (!entries.length) {
+        els.draftCategoryList.innerHTML = '<div class="empty">No categories added to the draft card yet.</div>';
+        return;
+      }
+      els.draftCategoryList.innerHTML = entries.map(entry => '<div class="item"><div class="row-between"><div><div class="item-title">' + escapeHtml(entry.category) + '</div><div class="badge-wrap"><span class="badge">' + entry.reward + '% back</span></div></div><button class="btn-danger" data-draft-remove="' + escapeHtml(entry.category) + '">Remove</button></div></div>').join('');
+      els.draftCategoryList.querySelectorAll('[data-draft-remove]').forEach(btn => btn.addEventListener('click', () => {
+        delete draftRewards[btn.getAttribute('data-draft-remove')];
+        renderDraftCategories();
+      }));
+    }
+
+    function renderCards() {
+      if (!state.cards.length) {
+        els.cardsList.innerHTML = '<div class="empty">No cards saved yet.</div>';
+        return;
+      }
+      els.cardsList.innerHTML = state.cards.map(card => {
+        const rows = categoryEntriesFromRewards(card.rewards).map(entry => '<div class="category-row"><div><div class="category-name">' + escapeHtml(entry.category) + '</div><div class="small-note">' + entry.reward + '% cashback</div></div><button class="btn-danger" data-remove-category="' + card.id + '::' + encodeURIComponent(entry.category) + '">Remove category</button></div>').join('');
+        return '<div class="item"><div class="item-header"><div><div class="item-title">' + escapeHtml(card.name) + '</div><div class="small-note">Edit categories and cashback values below.</div></div><div class="item-actions"><button class="btn-outline" data-toggle-editor="' + card.id + '">Edit</button><button class="btn-danger" data-remove-card="' + card.id + '">Remove card</button></div></div><div class="categories-editor hidden" id="editor-' + card.id + '"><div class="category-list">' + rows + '</div><div class="inline-form"><div><label for="edit-category-' + card.id + '">Add or update category</label><select id="edit-category-' + card.id + '"></select></div><div><label for="edit-reward-' + card.id + '">Cashback %</label><input id="edit-reward-' + card.id + '" type="number" min="0" step="0.1" placeholder="e.g. 3" /></div><div><button class="btn-secondary" data-save-category="' + card.id + '">Save</button></div></div></div></div>';
+      }).join('');
+
+      state.cards.forEach(card => {
+        const select = document.getElementById('edit-category-' + card.id);
+        if (select) renderSelectOptions(select);
+      });
+
+      els.cardsList.querySelectorAll('[data-toggle-editor]').forEach(btn => btn.addEventListener('click', () => {
+        const editor = document.getElementById('editor-' + btn.getAttribute('data-toggle-editor'));
+        if (editor) editor.classList.toggle('hidden');
+      }));
+
+      els.cardsList.querySelectorAll('[data-remove-card]').forEach(btn => btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-remove-card');
+        state.cards = state.cards.filter(card => card.id !== id);
+        saveState();
+        renderCards();
+        clearLookupOutput();
+      }));
+
+      els.cardsList.querySelectorAll('[data-save-category]').forEach(btn => btn.addEventListener('click', () => {
+        const cardId = btn.getAttribute('data-save-category');
+        const card = state.cards.find(item => item.id === cardId);
+        if (!card) return;
+        const category = document.getElementById('edit-category-' + cardId).value;
+        const reward = Number(document.getElementById('edit-reward-' + cardId).value);
+        if (Number.isNaN(reward) || reward <= 0) {
+          showMessage('warning', 'Enter a valid cashback percentage greater than 0 when updating a category.');
+          return;
+        }
+        card.rewards[category] = reward;
+        saveState();
+        renderCards();
+        clearLookupOutput();
+      }));
+
+      els.cardsList.querySelectorAll('[data-remove-category]').forEach(btn => btn.addEventListener('click', () => {
+        const [cardId, encodedCategory] = btn.getAttribute('data-remove-category').split('::');
+        const category = decodeURIComponent(encodedCategory);
+        const card = state.cards.find(item => item.id === cardId);
+        if (!card) return;
+        delete card.rewards[category];
+        if (!Object.keys(card.rewards).length) state.cards = state.cards.filter(item => item.id !== cardId);
+        saveState();
+        renderCards();
+        clearLookupOutput();
+      }));
+    }
+
+    function renderOverrides() {
+      const entries = Object.entries(state.overrides).sort((a, b) => a[0].localeCompare(b[0]));
+      if (!entries.length) {
+        els.overrideList.innerHTML = '<div class="empty">No custom overrides saved.</div>';
+        return;
+      }
+      els.overrideList.innerHTML = entries.map(([code, category]) => '<div class="item"><div class="row-between"><div class="meta"><span class="badge">' + code + '</span><span>' + escapeHtml(category) + '</span></div><button class="btn-danger" data-remove-override="' + code + '">Remove</button></div></div>').join('');
+      els.overrideList.querySelectorAll('[data-remove-override]').forEach(btn => btn.addEventListener('click', () => {
+        delete state.overrides[btn.getAttribute('data-remove-override')];
+        saveState();
+        renderOverrides();
+        clearLookupOutput();
+      }));
+    }
+
+    function addDraftCategory() {
+      const category = els.newCategory.value;
+      const reward = Number(els.newCategoryReward.value);
+      if (Number.isNaN(reward) || reward <= 0) {
+        showMessage('warning', 'Enter a valid cashback percentage greater than 0 for the category.');
+        return;
+      }
+      draftRewards[category] = reward;
+      els.newCategoryReward.value = '';
+      renderDraftCategories();
+    }
+
+    function addCard() {
+      const name = els.cardName.value.trim();
+      if (!name) {
+        showMessage('warning', 'Enter a card name first.');
+        return;
+      }
+      if (!Object.keys(draftRewards).length) {
+        showMessage('warning', 'Add at least one category and cashback value before saving the card.');
+        return;
+      }
+      if (state.cards.length >= 5) {
+        showMessage('warning', 'You can save up to 5 cards only. Remove one to add another.');
+        return;
+      }
+      state.cards.push({ id: crypto.randomUUID(), name, rewards: deepClone(draftRewards) });
+      saveState();
+      draftRewards = {};
+      els.cardName.value = '';
+      els.newCategoryReward.value = '';
+      renderDraftCategories();
+      renderCards();
+      clearLookupOutput();
+    }
+
+    function lookupMerchant() {
+      const merchantInput = els.merchantName.value.trim();
+      els.merchantLookupMessage.innerHTML = '';
+      if (!merchantInput) {
+        showMerchantMessage('warning', 'Enter a merchant name first.');
+        return;
+      }
+      const match = findMerchantMatch(merchantInput);
+      if (!match) {
+        showMerchantMessage('warning', 'No built-in merchant match found. You can still use MCC lookup directly below.');
+        return;
+      }
+      const category = resolveCategory(match.mcc);
+      els.posCode.value = match.mcc;
+      showMerchantMessage('result', 'Merchant match: <strong>' + escapeHtml(toTitleCase(match.merchant)) + '</strong><br>Mapped MCC: <strong>' + match.mcc + '</strong><br>Category: <strong>' + escapeHtml(category) + '</strong><br>The MCC field below has been filled in for you.');
+    }
+
+    function lookupBestCard() {
+      els.lookupMessage.innerHTML = '';
+      els.rankingContainer.innerHTML = '';
+      const code = els.posCode.value.replace(/\D/g, '').slice(0, 4);
+      els.posCode.value = code;
+      if (!/^\d{4}$/.test(code)) {
+        showMessage('warning', 'Enter a valid 4-digit POS code.');
+        return;
+      }
+      if (!state.cards.length) {
+        showMessage('warning', 'Add at least one card first.');
+        return;
+      }
+      const category = resolveCategory(code);
+      const ranked = state.cards.map(card => {
+        const categoryReward = Number(card.rewards[category]);
+        const generalReward = Number(card.rewards['General purchases']);
+        const hasDirectMatch = !Number.isNaN(categoryReward);
+        const hasGeneralMatch = Number.isNaN(categoryReward) && !Number.isNaN(generalReward);
+        const effectiveRate = hasDirectMatch ? categoryReward : (hasGeneralMatch ? generalReward : 1);
+        return { name: card.name, effectiveRate, matched: hasDirectMatch, usedGeneral: hasGeneralMatch };
+      }).sort((a, b) => b.effectiveRate - a.effectiveRate || a.name.localeCompare(b.name));
+      const winner = ranked[0];
+      showMessage('result', 'Best card to use: <strong>' + escapeHtml(winner.name) + '</strong><br>Code <strong>' + code + '</strong> maps to <strong>' + escapeHtml(category) + '</strong>.<br>Your best return is <strong>' + winner.effectiveRate + '% cashback</strong>.');
+      els.rankingContainer.innerHTML = '<div class="rankings">' + ranked.map((card, index) => {
+        const reason = card.matched ? ('Matched ' + escapeHtml(category) + ' reward') : (card.usedGeneral ? 'Used General purchases reward' : 'No category match — assumed 1% fallback');
+        return '<div class="ranking-row"><div><div class="item-title">#' + (index + 1) + ' ' + escapeHtml(card.name) + '</div><div class="small-note">' + reason + '</div></div><div class="badge">' + card.effectiveRate + '% back</div></div>';
+      }).join('') + '</div>';
+    }
+
+    function setupPwa() {
+      const iconSvg = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="#2563eb"/><text x="96" y="112" text-anchor="middle" font-size="88" font-family="Arial, sans-serif" fill="white">$</text></svg>');
+      const iconUrl = 'data:image/svg+xml;charset=utf-8,' + iconSvg;
+
+      const manifest = {
+        name: 'Credit Card Cashback Optimizer',
+        short_name: 'Cashback',
+        start_url: './',
+        display: 'standalone',
+        background_color: '#f8fafc',
+        theme_color: '#2563eb',
+        icons: [
+          { src: iconUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+          { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any' }
+        ]
+      };
+
+      const manifestLink = document.createElement('link');
+      manifestLink.rel = 'manifest';
+      manifestLink.href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+      document.head.appendChild(manifestLink);
+
+      const appleIcon = document.createElement('link');
+      appleIcon.rel = 'apple-touch-icon';
+      appleIcon.href = iconUrl;
+      document.head.appendChild(appleIcon);
+
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+        const swCode = `
+          const CACHE_NAME = 'cashback-optimizer-pwa-v1';
+          self.addEventListener('install', event => {
+            event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
+            self.skipWaiting();
+          });
+          self.addEventListener('activate', event => {
+            event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))));
+            self.clients.claim();
+          });
+          self.addEventListener('fetch', event => {
+            if (event.request.method !== 'GET') return;
+            event.respondWith(
+              caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+                const copy = response.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+                return response;
+              }).catch(() => caches.match('./')))
+            );
+          });
+        `;
+        const swUrl = URL.createObjectURL(new Blob([swCode], { type: 'text/javascript' }));
+        navigator.serviceWorker.register(swUrl).catch(error => console.error('Service worker registration failed:', error));
+      }
+    }
+
+    renderSelectOptions(els.newCategory);
+    renderSelectOptions(els.overrideCategory);
+    renderDraftCategories();
+    renderCards();
+    renderOverrides();
+    setupPwa();
+
+    els.addCategoryDraftBtn.addEventListener('click', addDraftCategory);
+    els.addCardBtn.addEventListener('click', addCard);
+    els.merchantLookupBtn.addEventListener('click', lookupMerchant);
+    els.lookupBtn.addEventListener('click', lookupBestCard);
+    els.saveOverrideBtn.addEventListener('click', () => {
+      const code = els.overrideCode.value.replace(/\D/g, '').slice(0, 4);
+      const category = els.overrideCategory.value;
+      if (!/^\d{4}$/.test(code)) {
+        showMessage('warning', 'Enter a valid 4-digit code for the override.');
+        return;
+      }
+      state.overrides[code] = category;
+      saveState();
+      els.overrideCode.value = '';
+      renderOverrides();
+    });
+
+    els.posCode.addEventListener('input', () => { els.posCode.value = els.posCode.value.replace(/\D/g, '').slice(0, 4); });
+    els.overrideCode.addEventListener('input', () => { els.overrideCode.value = els.overrideCode.value.replace(/\D/g, '').slice(0, 4); });
+  </script>
+</body>
+</html>
