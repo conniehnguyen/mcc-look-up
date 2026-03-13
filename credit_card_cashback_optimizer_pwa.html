@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#2563eb" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -33,7 +33,7 @@
     .container {
       max-width: 1200px;
       margin: 0 auto;
-      padding: 24px 20px 60px;
+      padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(60px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
     }
     h1 { margin: 0 0 8px; font-size: 2rem; }
     .subtitle, .small-note, .footer-note {
@@ -42,13 +42,6 @@
     }
     .subtitle { margin: 0 0 10px; }
     .small-note, .footer-note { font-size: .86rem; }
-    .install-note {
-      margin: 0 0 22px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      background: #eff6ff;
-      border: 1px solid #bfdbfe;
-    }
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -179,9 +172,8 @@
   <div class="container">
     <h1>Credit Card Cashback Optimizer</h1>
     <p class="subtitle">Save up to 5 credit cards, look up by merchant name or enter a 4-digit POS code (MCC), and see which card gives you the best cashback return.</p>
-    <div class="install-note small-note">Install on iPhone: open this page in Safari, tap Share, then Add to Home Screen. Offline mode works when served over HTTPS or localhost.</div>
 
-    <div class="grid">
+<div class="grid">
       <section class="card">
         <h2>Your cards</h2>
         <p>Add up to 5 cards. Each card can have multiple categories, and each category can have its own cashback value.</p>
@@ -524,8 +516,34 @@
     }
 
     function setupPwa() {
-      const iconSvg = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="36" fill="#2563eb"/><text x="96" y="112" text-anchor="middle" font-size="88" font-family="Arial, sans-serif" fill="white">$</text></svg>');
-      const iconUrl = 'data:image/svg+xml;charset=utf-8,' + iconSvg;
+      // Generate a PNG icon via canvas — iOS requires PNG for apple-touch-icon (SVG is ignored)
+      function makePngIcon(size) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const r = Math.round(size * 0.1875);
+        ctx.beginPath();
+        ctx.moveTo(r, 0); ctx.lineTo(size - r, 0);
+        ctx.quadraticCurveTo(size, 0, size, r);
+        ctx.lineTo(size, size - r);
+        ctx.quadraticCurveTo(size, size, size - r, size);
+        ctx.lineTo(r, size);
+        ctx.quadraticCurveTo(0, size, 0, size - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.fillStyle = '#2563eb';
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold ' + Math.round(size * 0.46) + 'px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('$', size / 2, size * 0.64);
+        return canvas.toDataURL('image/png');
+      }
+
+      const icon192 = makePngIcon(192);
+      const icon512 = makePngIcon(512);
 
       const manifest = {
         name: 'Credit Card Cashback Optimizer',
@@ -535,19 +553,21 @@
         background_color: '#f8fafc',
         theme_color: '#2563eb',
         icons: [
-          { src: iconUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-          { src: iconUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any' }
+          { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' }
         ]
       };
 
+      // Use data: URL for the manifest — iOS Safari doesn't process blob: URL manifests reliably
       const manifestLink = document.createElement('link');
       manifestLink.rel = 'manifest';
-      manifestLink.href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+      manifestLink.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
       document.head.appendChild(manifestLink);
 
+      // PNG data URL for apple-touch-icon — iOS ignores SVG and blob: hrefs here
       const appleIcon = document.createElement('link');
       appleIcon.rel = 'apple-touch-icon';
-      appleIcon.href = iconUrl;
+      appleIcon.href = makePngIcon(180);
       document.head.appendChild(appleIcon);
 
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
