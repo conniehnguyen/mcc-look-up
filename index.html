@@ -153,7 +153,7 @@
     .category-name { font-weight: 600; }
     .inline-form {
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) 140px 110px;
+      grid-template-columns: minmax(160px, 1fr) 130px 110px 100px;
       gap: 10px;
       align-items: end;
     }
@@ -187,7 +187,14 @@
             <select id="newCategory"></select>
           </div>
           <div>
-            <label for="newCategoryReward">Cashback % for category</label>
+            <label for="newCategoryRewardType">Reward type</label>
+            <select id="newCategoryRewardType">
+              <option value="cashback">Cashback %</option>
+              <option value="points">Points per $1</option>
+            </select>
+          </div>
+          <div>
+            <label for="newCategoryReward">Reward value</label>
             <input id="newCategoryReward" type="number" min="0" step="0.1" placeholder="e.g. 5" />
           </div>
         </div>
@@ -272,6 +279,7 @@
     const els = {
       cardName: document.getElementById('cardName'),
       newCategory: document.getElementById('newCategory'),
+      newCategoryRewardType: document.getElementById('newCategoryRewardType'),
       newCategoryReward: document.getElementById('newCategoryReward'),
       addCategoryDraftBtn: document.getElementById('addCategoryDraftBtn'),
       draftCategoryList: document.getElementById('draftCategoryList'),
@@ -296,6 +304,16 @@
     function deepClone(value) { return JSON.parse(JSON.stringify(value)); }
     function escapeHtml(value) { return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     function categoryEntriesFromRewards(rewards) { return Object.keys(rewards).sort().map(category => ({ category, reward: rewards[category] })); }
+    function getRewardValue(r) { return typeof r === 'object' && r !== null ? Number(r.value) : Number(r); }
+    function getRewardType(r) { return (typeof r === 'object' && r !== null && r.type === 'points') ? 'points' : 'cashback'; }
+    function formatReward(r) { const v = getRewardValue(r); const t = getRewardType(r); return t === 'points' ? v + 'x pts' : v + '% back'; }
+    function normalizeRewardEntry(raw) {
+      if (raw === null || raw === undefined) return null;
+      const value = typeof raw === 'object' ? Number(raw.value) : Number(raw);
+      if (Number.isNaN(value) || value <= 0) return null;
+      const type = (typeof raw === 'object' && raw.type === 'points') ? 'points' : 'cashback';
+      return { value, type };
+    }
     function renderSelectOptions(select) { select.innerHTML = categories.map(cat => '<option value="' + cat + '">' + cat + '</option>').join(''); }
     function resolveCategory(code) { return state.overrides[code] || mccToCategory[code] || 'Other'; }
     function normalizeMerchantName(name) { return String(name || '').toLowerCase().replace(/[^a-z0-9+& ]/g, ' ').replace(/\s+/g, ' ').trim(); }
@@ -308,12 +326,12 @@
       if (card && card.rewards && typeof card.rewards === 'object' && Object.keys(card.rewards).length) {
         const rewards = {};
         Object.keys(card.rewards).forEach(category => {
-          const value = Number(card.rewards[category]);
-          if (!Number.isNaN(value) && value > 0) rewards[category] = value;
+          const entry = normalizeRewardEntry(card.rewards[category]);
+          if (entry) rewards[category] = entry;
         });
-        return { id: card.id || crypto.randomUUID(), name: card.name || 'Unnamed Card', rewards: Object.keys(rewards).length ? rewards : { 'Other': 1 } };
+        return { id: card.id || crypto.randomUUID(), name: card.name || 'Unnamed Card', rewards: Object.keys(rewards).length ? rewards : { 'Other': { value: 1, type: 'cashback' } } };
       }
-      return { id: crypto.randomUUID(), name: 'Unnamed Card', rewards: { 'Other': 1 } };
+      return { id: crypto.randomUUID(), name: 'Unnamed Card', rewards: { 'Other': { value: 1, type: 'cashback' } } };
     }
 
     function loadState() {
@@ -353,7 +371,7 @@
         els.draftCategoryList.innerHTML = '<div class="empty">No categories added to the draft card yet.</div>';
         return;
       }
-      els.draftCategoryList.innerHTML = entries.map(entry => '<div class="item"><div class="row-between"><div><div class="item-title">' + escapeHtml(entry.category) + '</div><div class="badge-wrap"><span class="badge">' + entry.reward + '% back</span></div></div><button class="btn-danger" data-draft-remove="' + escapeHtml(entry.category) + '">Remove</button></div></div>').join('');
+      els.draftCategoryList.innerHTML = entries.map(entry => '<div class="item"><div class="row-between"><div><div class="item-title">' + escapeHtml(entry.category) + '</div><div class="badge-wrap"><span class="badge">' + formatReward(entry.reward) + '</span></div></div><button class="btn-danger" data-draft-remove="' + escapeHtml(entry.category) + '">Remove</button></div></div>').join('');
       els.draftCategoryList.querySelectorAll('[data-draft-remove]').forEach(btn => btn.addEventListener('click', () => {
         delete draftRewards[btn.getAttribute('data-draft-remove')];
         renderDraftCategories();
@@ -366,8 +384,8 @@
         return;
       }
       els.cardsList.innerHTML = state.cards.map(card => {
-        const rows = categoryEntriesFromRewards(card.rewards).map(entry => '<div class="category-row"><div><div class="category-name">' + escapeHtml(entry.category) + '</div><div class="small-note">' + entry.reward + '% cashback</div></div><button class="btn-danger" data-remove-category="' + card.id + '::' + encodeURIComponent(entry.category) + '">Remove category</button></div>').join('');
-        return '<div class="item"><div class="item-header"><div><div class="item-title">' + escapeHtml(card.name) + '</div><div class="small-note">Edit categories and cashback values below.</div></div><div class="item-actions"><button class="btn-outline" data-toggle-editor="' + card.id + '">Edit</button><button class="btn-danger" data-remove-card="' + card.id + '">Remove card</button></div></div><div class="categories-editor hidden" id="editor-' + card.id + '"><div class="category-list">' + rows + '</div><div class="inline-form"><div><label for="edit-category-' + card.id + '">Add or update category</label><select id="edit-category-' + card.id + '"></select></div><div><label for="edit-reward-' + card.id + '">Cashback %</label><input id="edit-reward-' + card.id + '" type="number" min="0" step="0.1" placeholder="e.g. 3" /></div><div><button class="btn-secondary" data-save-category="' + card.id + '">Save</button></div></div></div></div>';
+        const rows = categoryEntriesFromRewards(card.rewards).map(entry => '<div class="category-row"><div><div class="category-name">' + escapeHtml(entry.category) + '</div><div class="small-note">' + formatReward(entry.reward) + '</div></div><button class="btn-danger" data-remove-category="' + card.id + '::' + encodeURIComponent(entry.category) + '">Remove category</button></div>').join('');
+        return '<div class="item"><div class="item-header"><div><div class="item-title">' + escapeHtml(card.name) + '</div><div class="small-note">Edit categories below.</div></div><div class="item-actions"><button class="btn-outline" data-toggle-editor="' + card.id + '">Edit</button><button class="btn-danger" data-remove-card="' + card.id + '">Remove card</button></div></div><div class="categories-editor hidden" id="editor-' + card.id + '"><div class="category-list">' + rows + '</div><div class="inline-form"><div><label for="edit-category-' + card.id + '">Category</label><select id="edit-category-' + card.id + '"></select></div><div><label for="edit-type-' + card.id + '">Type</label><select id="edit-type-' + card.id + '"><option value="cashback">Cashback %</option><option value="points">Points per $1</option></select></div><div><label for="edit-reward-' + card.id + '">Value</label><input id="edit-reward-' + card.id + '" type="number" min="0" step="0.1" placeholder="e.g. 3" /></div><div><button class="btn-secondary" data-save-category="' + card.id + '">Save</button></div></div></div></div>';
       }).join('');
 
       state.cards.forEach(card => {
@@ -393,12 +411,13 @@
         const card = state.cards.find(item => item.id === cardId);
         if (!card) return;
         const category = document.getElementById('edit-category-' + cardId).value;
+        const type = document.getElementById('edit-type-' + cardId).value;
         const reward = Number(document.getElementById('edit-reward-' + cardId).value);
         if (Number.isNaN(reward) || reward <= 0) {
-          showMessage('warning', 'Enter a valid cashback percentage greater than 0 when updating a category.');
+          showMessage('warning', 'Enter a valid reward value greater than 0 when updating a category.');
           return;
         }
-        card.rewards[category] = reward;
+        card.rewards[category] = { value: reward, type };
         saveState();
         renderCards();
         clearLookupOutput();
@@ -434,12 +453,13 @@
 
     function addDraftCategory() {
       const category = els.newCategory.value;
+      const type = els.newCategoryRewardType.value;
       const reward = Number(els.newCategoryReward.value);
       if (Number.isNaN(reward) || reward <= 0) {
-        showMessage('warning', 'Enter a valid cashback percentage greater than 0 for the category.');
+        showMessage('warning', 'Enter a valid reward value greater than 0 for the category.');
         return;
       }
-      draftRewards[category] = reward;
+      draftRewards[category] = { value: reward, type };
       els.newCategoryReward.value = '';
       renderDraftCategories();
     }
@@ -500,18 +520,20 @@
       }
       const category = resolveCategory(code);
       const ranked = state.cards.map(card => {
-        const categoryReward = Number(card.rewards[category]);
-        const generalReward = Number(card.rewards['General purchases']);
-        const hasDirectMatch = !Number.isNaN(categoryReward);
-        const hasGeneralMatch = Number.isNaN(categoryReward) && !Number.isNaN(generalReward);
-        const effectiveRate = hasDirectMatch ? categoryReward : (hasGeneralMatch ? generalReward : 1);
-        return { name: card.name, effectiveRate, matched: hasDirectMatch, usedGeneral: hasGeneralMatch };
-      }).sort((a, b) => b.effectiveRate - a.effectiveRate || a.name.localeCompare(b.name));
+        const catEntry = card.rewards[category];
+        const genEntry = card.rewards['General purchases'];
+        const hasDirectMatch = catEntry != null && getRewardValue(catEntry) > 0;
+        const hasGeneralMatch = !hasDirectMatch && genEntry != null && getRewardValue(genEntry) > 0;
+        const effectiveEntry = hasDirectMatch ? catEntry : (hasGeneralMatch ? genEntry : null);
+        const effectiveValue = effectiveEntry ? getRewardValue(effectiveEntry) : 1;
+        const effectiveType = effectiveEntry ? getRewardType(effectiveEntry) : 'cashback';
+        return { name: card.name, effectiveValue, effectiveType, matched: hasDirectMatch, usedGeneral: hasGeneralMatch };
+      }).sort((a, b) => b.effectiveValue - a.effectiveValue || a.name.localeCompare(b.name));
       const winner = ranked[0];
-      showMessage('result', 'Best card to use: <strong>' + escapeHtml(winner.name) + '</strong><br>Code <strong>' + code + '</strong> maps to <strong>' + escapeHtml(category) + '</strong>.<br>Your best return is <strong>' + winner.effectiveRate + '% cashback</strong>.');
+      showMessage('result', 'Best card to use: <strong>' + escapeHtml(winner.name) + '</strong><br>Code <strong>' + code + '</strong> maps to <strong>' + escapeHtml(category) + '</strong>.<br>Your best return is <strong>' + formatReward({ value: winner.effectiveValue, type: winner.effectiveType }) + '</strong>.');
       els.rankingContainer.innerHTML = '<div class="rankings">' + ranked.map((card, index) => {
         const reason = card.matched ? ('Matched ' + escapeHtml(category) + ' reward') : (card.usedGeneral ? 'Used General purchases reward' : 'No category match — assumed 1% fallback');
-        return '<div class="ranking-row"><div><div class="item-title">#' + (index + 1) + ' ' + escapeHtml(card.name) + '</div><div class="small-note">' + reason + '</div></div><div class="badge">' + card.effectiveRate + '% back</div></div>';
+        return '<div class="ranking-row"><div><div class="item-title">#' + (index + 1) + ' ' + escapeHtml(card.name) + '</div><div class="small-note">' + reason + '</div></div><div class="badge">' + formatReward({ value: card.effectiveValue, type: card.effectiveType }) + '</div></div>';
       }).join('') + '</div>';
     }
 
