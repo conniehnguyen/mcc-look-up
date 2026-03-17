@@ -23,13 +23,11 @@ import argparse
 import os
 import re
 import sys
-import ollama
 
 from checks import check_style_rules, check_headings, check_typos, check_links, check_code_blocks
 from exemptions import load_exemptions, save_exemptions, add_exemption, remove_exemption, list_exemptions, is_exempt
 from prompts import SYSTEM_PROMPT
 
-MODEL = 'qwen2.5-coder:7b'
 DOC_EXTENSIONS = {'.md', '.mdx', '.rst', '.txt'}
 SKIP_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'build', 'dist'}
 
@@ -82,14 +80,20 @@ def run_ai_analysis(file_path: str, content: str) -> list[dict]:
     """Ask the model to find style issues that patterns can't catch."""
     findings = []
     try:
-        response = ollama.chat(
-            model=MODEL,
-            messages=[
-                {'role': 'system', 'content': SYSTEM_PROMPT},
-                {'role': 'user', 'content': f'Review this documentation file: {file_path}\n\n```\n{content[:6000]}\n```'},
-            ]
+        import google.generativeai as genai
+        api_key = os.environ.get('GOOGLE_API_KEY')
+        if not api_key:
+            print('  ⚠ GOOGLE_API_KEY environment variable not set. Skipping AI analysis.')
+            return []
+        genai.configure(api_key=api_key)
+        gemini = genai.GenerativeModel(
+            model_name='gemini-1.5-flash',
+            system_instruction=SYSTEM_PROMPT
         )
-        text = response.message.content or ''
+        response = gemini.generate_content(
+            f'Review this documentation file: {file_path}\n\n```\n{content[:6000]}\n```'
+        )
+        text = response.text or ''
         if 'NO_AI_FINDINGS' in text:
             return []
 
@@ -135,7 +139,7 @@ def review(target_path: str, use_ai: bool, check_links_flag: bool, exemptions: d
     print_header(f'Documentation Review Agent')
     print(f'\n  Target: {target_path}')
     print(f'  Files:  {len(doc_files)}')
-    print(f'  Model:  {MODEL if use_ai else "none (--no-ai)"}')
+    print(f'  Model:  {"gemini-1.5-flash" if use_ai else "none (--no-ai)"}')
 
     all_findings = []
 
