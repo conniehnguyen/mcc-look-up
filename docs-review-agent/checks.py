@@ -86,7 +86,7 @@ def check_style_rules(file_path: str, content: str) -> List[Dict]:
 def check_headings(file_path: str, content: str) -> List[Dict]:
     findings = []
     for i, line in enumerate(content.splitlines(), 1):
-        m = re.match(r'^#{1,6}\s+(.+)', line)
+        m = re.match(r'^#{2,6}\s+(.+)', line)  # skip H1 — document titles are exempt
         if m:
             heading_text = m.group(1).strip()
             if is_title_case_violation(heading_text):
