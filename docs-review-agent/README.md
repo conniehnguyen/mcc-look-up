@@ -166,6 +166,44 @@ python3 agent.py /path/to/your/docs --no-links
 python3 agent.py /path/to/your/docs --no-ai --no-links
 ```
 
+### With localhost link checking (most accurate)
+
+By default, the agent checks relative links by looking for files on disk. If your doc platform resolves links differently — for example, treating `gw-application/docs/page` as root-relative, or serving extension-less URLs like `/api/reference` — the filesystem check may miss broken links or report false positives.
+
+The `--base-url` flag tells the agent to check all relative links by sending real HTTP requests to a locally running copy of your docs site instead.
+
+**Step 1 — Start your doc platform's dev server** in a separate terminal:
+
+```bash
+# MkDocs
+mkdocs serve
+
+# Docusaurus
+npm run start
+
+# Hugo
+hugo server
+```
+
+**Step 2 — Run the agent with `--base-url`:**
+
+```bash
+python3 agent.py /path/to/your/docs --base-url http://localhost:8000
+```
+
+The agent prints the active mode at the start of each run:
+
+```text
+  Links:  localhost mode → http://localhost:8000
+```
+
+| Link type | What the agent checks |
+| --- | --- |
+| `https://example.com` | Live HTTP request (same in both modes) |
+| `/gw-application/docs/page` | `http://localhost:8000/gw-application/docs/page` |
+| `../api/reference` | Resolved to a root-relative path, then checked on localhost |
+| `page-name` (no leading `/`) | Resolved relative to the current file, then checked on localhost |
+
 ---
 
 ## Exemptions

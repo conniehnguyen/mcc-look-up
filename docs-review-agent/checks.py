@@ -161,7 +161,35 @@ def check_typos(file_path: str, content: str) -> List[Dict]:
 
 # ── Link checks ────────────────────────────────────────────────────────────────
 
-def check_links(file_path: str, content: str, base_path: str) -> List[Dict]:
+def _http_check(findings: List[Dict], file_path: str, i: int, url: str, line: str, label: str = ''):
+    """Send a HEAD request and append a finding if the URL is broken."""
+    display = label or url
+    try:
+        req = urllib.request.Request(url, method='HEAD',
+            headers={'User-Agent': 'Mozilla/5.0 docs-review-agent/1.0'})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            if resp.status >= 400:
+                findings.append(finding(
+                    file_path, i, 'LINK', 'HIGH', 'link',
+                    f'Broken link (HTTP {resp.status}): {display}',
+                    'Update or remove the broken link.', line
+                ))
+    except urllib.error.HTTPError as e:
+        if e.code >= 400:
+            findings.append(finding(
+                file_path, i, 'LINK', 'HIGH', 'link',
+                f'Broken link (HTTP {e.code}): {display}',
+                'Update or remove the broken link.', line
+            ))
+    except Exception:
+        findings.append(finding(
+            file_path, i, 'LINK', 'HIGH', 'link',
+            f'Unreachable link: {display}',
+            'Verify the link is correct and the server is reachable.', line
+        ))
+
+
+def check_links(file_path: str, content: str, base_path: str, base_url: str = '') -> List[Dict]:
     findings = []
     link_pattern = re.compile(r'\[([^\]]+)\]\(([^\)]+)\)')
 
@@ -169,43 +197,37 @@ def check_links(file_path: str, content: str, base_path: str) -> List[Dict]:
         for m in link_pattern.finditer(line):
             url = m.group(2).strip()
 
-            # Skip anchors-only links and mailto
+            # Skip anchor-only links and mailto
             if url.startswith('#') or url.startswith('mailto:'):
                 continue
 
             if url.startswith('http://') or url.startswith('https://'):
-                # Check HTTP link
-                try:
-                    req = urllib.request.Request(url, method='HEAD',
-                        headers={'User-Agent': 'Mozilla/5.0 docs-review-agent/1.0'})
-                    with urllib.request.urlopen(req, timeout=8) as resp:
-                        if resp.status >= 400:
-                            findings.append(finding(
-                                file_path, i, 'LINK',
-                                'HIGH', 'link',
-                                f'Broken link (HTTP {resp.status}): {url}',
-                                'Update or remove the broken link.',
-                                line
-                            ))
-                except urllib.error.HTTPError as e:
-                    if e.code >= 400:
-                        findings.append(finding(
-                            file_path, i, 'LINK',
-                            'HIGH', 'link',
-                            f'Broken link (HTTP {e.code}): {url}',
-                            'Update or remove the broken link.',
-                            line
-                        ))
-                except Exception:
-                    findings.append(finding(
-                        file_path, i, 'LINK',
-                        'HIGH', 'link',
-                        f'Unreachable link: {url}',
-                        'Verify the link is correct and the server is reachable.',
-                        line
-                    ))
+                # External HTTP link — check directly
+                _http_check(findings, file_path, i, url, line)
+
+            elif base_url:
+                # Localhost mode: convert every relative/absolute path to a
+                # full localhost URL and send an HTTP request.
+                url_path = url.split('#')[0]
+                if not url_path:
+                    continue  # anchor-only after stripping fragment
+
+                if url_path.startswith('/'):
+                    # Absolute path — join straight onto the base URL
+                    full_url = base_url.rstrip('/') + url_path
+                else:
+                    # Relative path — resolve to an absolute file path, then
+                    # compute its position relative to the repo root so we can
+                    # build the correct URL path.
+                    doc_dir = os.path.dirname(file_path)
+                    resolved = os.path.normpath(os.path.join(doc_dir, url_path))
+                    rel = os.path.relpath(resolved, base_path)
+                    full_url = base_url.rstrip('/') + '/' + rel.replace(os.sep, '/')
+
+                _http_check(findings, file_path, i, full_url, line, label=url)
+
             else:
-                # Relative link — check if file exists
+                # Filesystem mode — check whether the target file exists on disk
                 url_path = url.split('#')[0]
                 if not url_path:
                     continue  # anchor-only link after stripping fragment
@@ -225,12 +247,11 @@ def check_links(file_path: str, content: str, base_path: str) -> List[Dict]:
 
                 if not os.path.exists(target):
                     findings.append(finding(
-                        file_path, i, 'LINK',
-                        'HIGH', 'link',
+                        file_path, i, 'LINK', 'HIGH', 'link',
                         f'Broken relative link — file not found: {url}',
-                        f'Check the path. Expected: {target}',
-                        line
+                        f'Check the path. Expected: {target}', line
                     ))
+
     return findings
 
 

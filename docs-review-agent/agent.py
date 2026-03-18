@@ -130,7 +130,7 @@ def run_ai_analysis(file_path: str, content: str) -> list[dict]:
 
 # ── Main review ────────────────────────────────────────────────────────────────
 
-def review(target_path: str, use_ai: bool, check_links_flag: bool, exemptions: dict) -> list[dict]:
+def review(target_path: str, use_ai: bool, check_links_flag: bool, exemptions: dict, base_url: str = '') -> list[dict]:
     doc_files = collect_doc_files(target_path)
     if not doc_files:
         print(f'No documentation files found at: {target_path}')
@@ -140,6 +140,8 @@ def review(target_path: str, use_ai: bool, check_links_flag: bool, exemptions: d
     print(f'\n  Target: {target_path}')
     print(f'  Files:  {len(doc_files)}')
     print(f'  Model:  {"gemini-1.5-flash" if use_ai else "none (--no-ai)"}')
+    if base_url:
+        print(f'  Links:  localhost mode → {base_url}')
 
     all_findings = []
 
@@ -164,7 +166,7 @@ def review(target_path: str, use_ai: bool, check_links_flag: bool, exemptions: d
         # 4. Link checks (optional — slow due to network calls)
         if check_links_flag:
             print('  Checking links...')
-            file_findings += check_links(file_path, content, target_path)
+            file_findings += check_links(file_path, content, target_path, base_url)
 
         # 5. AI analysis (optional)
         if use_ai and content.strip():
@@ -250,6 +252,8 @@ def main():
     parser.add_argument('path', nargs='?', default='.', help='Path to doc file or directory')
     parser.add_argument('--no-ai', action='store_true', help='Skip AI analysis')
     parser.add_argument('--no-links', action='store_true', help='Skip link checking')
+    parser.add_argument('--base-url', metavar='URL', default='',
+                        help='Localhost base URL to check links against (e.g. http://localhost:8000)')
     parser.add_argument('--list-exemptions', action='store_true', help='List all saved exemptions')
     parser.add_argument('--remove-exempt', metavar='ID', help='Remove an exemption by ID')
     args = parser.parse_args()
@@ -271,6 +275,7 @@ def main():
         use_ai=not args.no_ai,
         check_links_flag=not args.no_links,
         exemptions=exemptions,
+        base_url=args.base_url,
     )
 
     print_summary(all_findings, exemptions)
