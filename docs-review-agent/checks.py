@@ -1,11 +1,12 @@
 """
 Deterministic checks that don't need an AI model.
 
-  check_style_rules()   — pattern-based Microsoft style guide violations
-  check_headings()      — heading sentence case
-  check_typos()         — spell checking (skips code blocks and technical terms)
-  check_links()         — broken HTTP and relative file links
-  check_code_blocks()   — code blocks missing language tags, unclosed fences
+  check_style_rules()        — pattern-based Microsoft style guide violations
+  check_headings()           — heading sentence case
+  check_typos()              — spell checking (skips code blocks and technical terms)
+  check_links()              — broken HTTP and relative file links
+  check_code_blocks()        — code blocks missing language tags, unclosed fences
+  check_sensitive_content()  — credentials, internal infrastructure, version disclosure
 """
 
 import re
@@ -292,5 +293,156 @@ def check_code_blocks(file_path: str, content: str) -> List[Dict]:
             'Add a closing ``` fence.',
             lines[block_start - 1]
         ))
+
+    return findings
+
+
+# ── Sensitive content checks ────────────────────────────────────────────────────
+
+# Patterns that fire everywhere (including inside code blocks).
+# 'scope': 'all'   → checked in prose AND code blocks
+# 'scope': 'prose' → skipped inside code blocks (e.g. file paths, version strings
+#                    are often intentional in code examples)
+SENSITIVE_PATTERNS = [
+
+    # ── Credentials ────────────────────────────────────────────────────────────
+    {
+        'code': 'SEC-001', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'Private key or certificate block',
+        'pattern': r'-----BEGIN\s+(?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?(?:PRIVATE KEY|CERTIFICATE)',
+        'fix': 'Remove private keys and certificates from documentation entirely.',
+    },
+    {
+        'code': 'SEC-002', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'Credentials embedded in URL',
+        'pattern': r'https?://[^\s/"]+:[^\s/"@]+@',
+        'fix': 'Replace embedded credentials with a placeholder, e.g. https://<user>:<password>@host/',
+    },
+    {
+        'code': 'SEC-003', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'Hardcoded secret value',
+        # Matches   password: "abc123"   or   API_KEY=abc123
+        # Skips     password: <YOUR_KEY>  or   password: ****  (placeholders)
+        'pattern': (
+            r'(?i)(?:password|passwd|secret|api[-_]?key|auth[-_]?token|'
+            r'access[-_]?key|private[-_]?key|client[-_]?secret)\s*[:=]\s*'
+            r'["\']?(?!<|your[-_]|example|change[-_]?me|\*+|xxx+|placeholder)'
+            r'[A-Za-z0-9+/!@#$%^&*()_\-]{8,}'
+        ),
+        'fix': 'Replace the value with a placeholder like <YOUR_SECRET> or load from an environment variable.',
+    },
+
+    # ── Known API key formats ───────────────────────────────────────────────────
+    {
+        'code': 'SEC-004', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'AWS access key ID',
+        'pattern': r'AKIA[0-9A-Z]{16}',
+        'fix': 'Revoke this key immediately and remove it from documentation.',
+    },
+    {
+        'code': 'SEC-005', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'Google API key',
+        'pattern': r'AIza[0-9A-Za-z\-_]{35}',
+        'fix': 'Revoke this key immediately and remove it from documentation.',
+    },
+    {
+        'code': 'SEC-006', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'GitHub personal access token',
+        'pattern': r'gh[pousr]_[A-Za-z0-9]{36,}',
+        'fix': 'Revoke this token immediately and remove it from documentation.',
+    },
+    {
+        'code': 'SEC-007', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'Slack token',
+        'pattern': r'xox[baprs]-[0-9A-Za-z\-]{10,}',
+        'fix': 'Revoke this token immediately and remove it from documentation.',
+    },
+    {
+        'code': 'SEC-008', 'severity': 'HIGH', 'scope': 'all',
+        'label': 'Stripe live secret key',
+        'pattern': r'sk_live_[0-9A-Za-z]{24,}',
+        'fix': 'Revoke this key immediately and remove it from documentation.',
+    },
+
+    # ── Internal infrastructure ─────────────────────────────────────────────────
+    {
+        'code': 'SEC-010', 'severity': 'MEDIUM', 'scope': 'all',
+        'label': 'Internal RFC 1918 IP address',
+        'pattern': (
+            r'(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+            r'|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}'
+            r'|192\.168\.\d{1,3}\.\d{1,3})'
+        ),
+        'fix': 'Replace internal IP addresses with placeholders like <SERVER_IP> or remove from public docs.',
+    },
+    {
+        'code': 'SEC-011', 'severity': 'MEDIUM', 'scope': 'all',
+        'label': 'Staging or dev environment URL',
+        'pattern': r'(?i)https?://(?:staging|dev|uat|test|preprod|sandbox)\.',
+        'fix': 'Replace staging/dev URLs with production URLs or generic placeholders.',
+    },
+    {
+        'code': 'SEC-012', 'severity': 'MEDIUM', 'scope': 'all',
+        'label': 'Internal domain suffix (.internal, .corp, .local)',
+        'pattern': r'[\w\-]+\.(?:internal|corp|local|lan|intranet)(?:[/\s"\':]|$)',
+        'fix': 'Remove internal domain names from public documentation.',
+    },
+
+    # ── Version disclosure ──────────────────────────────────────────────────────
+    {
+        'code': 'SEC-020', 'severity': 'LOW', 'scope': 'prose',
+        'label': 'Specific OS or middleware version disclosed',
+        'pattern': (
+            r'(?i)(?:running|installed|using|version|v)\s+'
+            r'(?:ubuntu|centos|debian|rhel|windows server|apache|nginx|'
+            r'mysql|postgres|redis|elasticsearch)\s+[\d.]+'
+        ),
+        'fix': 'Avoid pinning public docs to exact software versions — use the major version or omit.',
+    },
+
+    # ── File system paths ───────────────────────────────────────────────────────
+    {
+        'code': 'SEC-021', 'severity': 'LOW', 'scope': 'prose',
+        'label': 'Internal file system path',
+        'pattern': r'(?:/opt/[\w]|/etc/[\w]|/var/[\w]|/home/[\w]+/|C:\\Users\\[\w]+\\)',
+        'fix': 'Replace specific file paths with generic placeholders like /path/to/config.',
+    },
+
+    # ── Personnel / PII ─────────────────────────────────────────────────────────
+    {
+        'code': 'SEC-030', 'severity': 'LOW', 'scope': 'all',
+        'label': 'Real email address (consider using example.com)',
+        # Skips common placeholder domains
+        'pattern': r'[a-zA-Z0-9._%+\-]+@(?!example\.com|your\-domain\.com|domain\.com)[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}',
+        'fix': 'Replace real email addresses with examples like user@example.com to avoid exposing personnel.',
+    },
+]
+
+
+def check_sensitive_content(file_path: str, content: str) -> List[Dict]:
+    """
+    Scan a documentation file for content that could aid attackers:
+    credentials, known API key formats, internal infrastructure references,
+    version disclosures, and personally identifiable information.
+    """
+    findings = []
+    lines = content.splitlines()
+    code_lines = get_code_block_lines(lines)
+
+    for pattern_def in SENSITIVE_PATTERNS:
+        regex = re.compile(pattern_def['pattern'])
+        for i, line in enumerate(lines, 1):
+            if pattern_def['scope'] == 'prose' and i in code_lines:
+                continue  # prose-only patterns skip code blocks
+            if regex.search(line):
+                findings.append(finding(
+                    file_path, i,
+                    pattern_def['code'],
+                    pattern_def['severity'],
+                    'security',
+                    f"{pattern_def['label']}: potential sensitive content detected.",
+                    pattern_def['fix'],
+                    line,
+                ))
 
     return findings

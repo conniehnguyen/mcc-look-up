@@ -10,6 +10,7 @@ Features:
   4. Typo detection
   5. Broken link detection (HTTP and relative)
   6. Code block formatting checks
+  7. Sensitive content detection (credentials, internal IPs, API keys, version disclosure)
 
 Usage:
   python3 agent.py /path/to/docs              ← review all docs
@@ -24,7 +25,7 @@ import os
 import re
 import sys
 
-from checks import check_style_rules, check_headings, check_typos, check_links, check_code_blocks
+from checks import check_style_rules, check_headings, check_typos, check_links, check_code_blocks, check_sensitive_content
 from exemptions import load_exemptions, save_exemptions, add_exemption, remove_exemption, list_exemptions, is_exempt
 from prompts import SYSTEM_PROMPT
 
@@ -163,12 +164,15 @@ def review(target_path: str, use_ai: bool, check_links_flag: bool, exemptions: d
         # 3. Code block checks
         file_findings += check_code_blocks(file_path, content)
 
-        # 4. Link checks (optional — slow due to network calls)
+        # 4. Sensitive content checks
+        file_findings += check_sensitive_content(file_path, content)
+
+        # 5. Link checks (optional — slow due to network calls)
         if check_links_flag:
             print('  Checking links...')
             file_findings += check_links(file_path, content, target_path, base_url)
 
-        # 5. AI analysis (optional)
+        # 6. AI analysis (optional)
         if use_ai and content.strip():
             print('  Running AI analysis...')
             file_findings += run_ai_analysis(file_path, content)
