@@ -58,6 +58,93 @@ To force a fresh crawl:
 python server.py --refresh
 ```
 
+## Accessing sites behind a login wall
+
+If your documentation site requires a login, set one of the following environment variables before starting the server. Use whichever method matches how your site handles authentication — you only need one.
+
+| Variable | When to use |
+| --- | --- |
+| `DOCS_COOKIE` | Site uses session-based login (most doc platforms: Confluence, Notion, MkDocs with auth, etc.) |
+| `DOCS_AUTH_TOKEN` | Site accepts a Bearer token or API key in the Authorization header |
+| `DOCS_BASIC_AUTH` | Site uses HTTP Basic Auth (`username:password`) |
+
+> The MCP server cannot complete interactive login flows such as OAuth, OIDC, SAML, or MFA challenges — those require a real browser. The session cookie method is the practical workaround for those cases.
+
+---
+
+### Option A — Session cookie (most common)
+
+This works for any site you can log into with a browser, including SSO/OIDC-protected sites.
+
+**Step 1 — Log in via your browser as normal.**
+
+**Step 2 — Open DevTools and copy your session cookie.**
+
+1. Press `F12` (or `Cmd+Option+I` on Mac) to open DevTools
+2. Go to the **Network** tab
+3. Reload the page
+4. Click any request to your doc site
+5. In the **Request Headers** panel, find the `Cookie:` line
+6. Copy the entire value (it will look like `session=abc123; csrf=xyz456; ...`)
+
+**Step 3 — Set the env var and start the server.**
+
+```bash
+export DOCS_COOKIE="session=abc123; csrf=xyz456"
+export DOCS_BASE_URL="https://docs.yoursite.com/"
+python server.py
+```
+
+> **Session cookies expire.** When you get an auth error, repeat step 2 and update `DOCS_COOKIE` with a fresh value. Re-run with `--refresh` to re-crawl.
+
+---
+
+### Option B — Bearer token
+
+Use this if your doc site provides an API token or your company issues OAuth access tokens.
+
+```bash
+export DOCS_AUTH_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+export DOCS_BASE_URL="https://docs.yoursite.com/"
+python server.py
+```
+
+---
+
+### Option C — HTTP Basic Auth
+
+```bash
+export DOCS_BASIC_AUTH="myusername:mypassword"
+export DOCS_BASE_URL="https://docs.yoursite.com/"
+python server.py
+```
+
+---
+
+### Passing credentials in AI client configs
+
+When registering the server with an AI client (Claude Desktop, Cursor, etc.), pass credentials in the `env` block so they are never hardcoded in config files that get committed to version control:
+
+```json
+{
+  "mcpServers": {
+    "my-internal-docs": {
+      "command": "python3",
+      "args": ["/path/to/mcp-docs-server/server.py"],
+      "env": {
+        "DOCS_BASE_URL": "https://docs.yoursite.com/",
+        "DOCS_SITE_NAME": "Internal Docs",
+        "DOCS_COOKIE": "session=abc123; csrf=xyz456"
+      }
+    }
+  }
+}
+```
+
+> Keep these config files out of version control (add to `.gitignore`) since they contain your session credentials.
+
+---
+
 ## Connecting AI clients
 
 MCP (Model Context Protocol) is an open standard. You do not need a desktop AI app — many users connect through a VS Code plugin or another editor extension. The setup pattern is the same regardless: you point the client at `server.py` and pass your env vars in a config file. The config file location is the only thing that differs between clients.
@@ -91,7 +178,14 @@ MCP (Model Context Protocol) is an open standard. You do not need a desktop AI a
 
 Requires VS Code 1.99+ with GitHub Copilot Chat enabled.
 
-Create `.vscode/mcp.json` in your workspace:
+**Config file location:**
+
+| Scope | Path |
+| --- | --- |
+| Per workspace | `.vscode/mcp.json` inside your project folder |
+| Global (all workspaces) | Not supported — use per-workspace config |
+
+Create `.vscode/mcp.json` in your workspace root (create the file if it does not exist):
 
 ```json
 {
@@ -115,8 +209,14 @@ Open the Copilot Chat panel, switch to **Agent mode**, and the docs tools will a
 
 ### Cursor
 
-**For a single project** — create `.cursor/mcp.json` in your project root.
-**Globally** — create `~/.cursor/mcp.json`.
+**Config file location:**
+
+| Scope | Path |
+| --- | --- |
+| Per project | `.cursor/mcp.json` inside your project folder |
+| Global (all projects) | `~/.cursor/mcp.json` (macOS/Linux) or `%USERPROFILE%\.cursor\mcp.json` (Windows) |
+
+Create or open whichever file applies (create it if it does not exist):
 
 ```json
 {
@@ -173,7 +273,16 @@ Restart Claude Desktop after saving. A hammer icon will appear in the chat input
 
 ### Windsurf
 
-Create `~/.codeium/windsurf/mcp_config.json` (or open **Windsurf Settings → MCP**):
+**Config file location:**
+
+| OS | Path |
+| --- | --- |
+| macOS / Linux | `~/.codeium/windsurf/mcp_config.json` |
+| Windows | `%USERPROFILE%\.codeium\windsurf\mcp_config.json` |
+
+Alternatively open **Windsurf Settings → MCP** and paste the JSON there directly.
+
+Create or open the file (create it if it does not exist):
 
 ```json
 {
@@ -196,7 +305,14 @@ Restart Windsurf. The tools are available in Cascade (agent mode).
 
 ### Continue.dev (VS Code / JetBrains)
 
-Add to `~/.continue/config.json` under the `mcpServers` key:
+**Config file location:**
+
+| OS | Path |
+| --- | --- |
+| macOS / Linux | `~/.continue/config.json` |
+| Windows | `%USERPROFILE%\.continue\config.json` |
+
+Open the file (create it if it does not exist) and add or extend the `mcpServers` array:
 
 ```json
 {
@@ -218,12 +334,21 @@ Add to `~/.continue/config.json` under the `mcpServers` key:
 
 ### Claude Code (CLI)
 
+No config file to edit — Claude Code stores MCP servers in its own settings. Register the server with a single command:
+
 ```bash
 claude mcp add gamewarden-docs \
   --env DOCS_BASE_URL=https://helpcenter.gamewarden.io/index-dod/ \
   --env DOCS_SITE_NAME="GameWarden Help Center" \
   -- python3 /absolute/path/to/mcp-docs-server/server.py
 ```
+
+Claude Code writes the entry to its settings file automatically:
+
+| OS | Path |
+| --- | --- |
+| macOS / Linux | `~/.claude/settings.json` |
+| Windows | `%USERPROFILE%\.claude\settings.json` |
 
 To verify the server is registered:
 

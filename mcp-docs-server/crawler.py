@@ -6,8 +6,20 @@ pages under that URL, extract clean text, and support keyword search.
 
 Results are cached to disk (index_cache.json) so the server doesn't
 re-crawl on every startup. Call crawler.crawl(force=True) to refresh.
+
+Authentication (for sites behind a login wall):
+  Pass credentials via constructor or set env vars in server.py.
+  Three methods are supported — use whichever matches your site:
+
+  1. Session cookie  — log in via browser, copy the Cookie header value
+  2. Bearer token   — API token or OAuth access token
+  3. HTTP Basic Auth — username:password (base64-encoded automatically)
+
+  The crawler cannot complete interactive OAuth/OIDC/SAML flows or MFA.
+  For those sites, the session cookie method is the only practical option.
 """
 
+import base64
 import json
 import os
 import re
@@ -96,12 +108,25 @@ class DocsCrawler:
         base_url: str,
         max_pages: int = 300,
         cache_path: Optional[str] = None,
+        cookie: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        basic_auth: Optional[str] = None,
     ):
         self.base_url = base_url.rstrip('/') + '/'
         self.max_pages = max_pages
         self.cache_path = cache_path
         self._index: List[Dict] = []
         self._crawled = False
+
+        # Build auth headers once — used in every request
+        self._auth_headers: Dict[str, str] = {}
+        if cookie:
+            self._auth_headers['Cookie'] = cookie
+        elif auth_token:
+            self._auth_headers['Authorization'] = f'Bearer {auth_token}'
+        elif basic_auth:
+            encoded = base64.b64encode(basic_auth.encode()).decode()
+            self._auth_headers['Authorization'] = f'Basic {encoded}'
 
     # ------------------------------------------------------------------
     # Public API
@@ -213,17 +238,46 @@ class DocsCrawler:
 
     def _fetch(self, url: str) -> str:
         try:
-            req = urllib.request.Request(
-                url,
-                headers={'User-Agent': 'docs-mcp-server/1.0 (documentation indexer)'},
-            )
+            headers = {'User-Agent': 'docs-mcp-server/1.0 (documentation indexer)'}
+            headers.update(self._auth_headers)
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=12) as resp:
                 content_type = resp.headers.get('Content-Type', '')
                 if 'html' not in content_type:
                     return ''
                 return resp.read().decode('utf-8', errors='replace')
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                raise PermissionError(
+                    f'Auth required for {url} (HTTP {e.code}). '
+                    'Set DOCS_COOKIE, DOCS_AUTH_TOKEN, or DOCS_BASIC_AUTH.'
+                )
+            return ''
         except Exception:
             return ''
+
+    def check_auth(self) -> bool:
+        """
+        Fetch the base URL and return True if the response looks like real
+        content (not a login page). Call this before crawling to catch
+        auth failures early with a clear error message.
+        """
+        try:
+            html = self._fetch(self.base_url)
+        except PermissionError as e:
+            raise
+        if not html:
+            return False
+        # Heuristic: login pages typically contain these patterns
+        login_signals = ['login', 'sign in', 'sign-in', 'authenticate', 'password']
+        text_lower = html.lower()
+        # If the page has almost no content or is dominated by login signals,
+        # it's likely an auth wall
+        content_length = len(text_lower.strip())
+        signal_hits = sum(text_lower.count(s) for s in login_signals)
+        if content_length < 2000 and signal_hits >= 2:
+            return False
+        return True
 
     def _cache_key(self) -> str:
         """Derive a filename-safe key from the base URL."""
