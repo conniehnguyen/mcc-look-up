@@ -28,10 +28,25 @@ class SlackClient:
     # Seconds to wait between API calls to stay within Slack rate limits.
     # Tier 3 methods allow ~50 req/min; 1.2 s gives comfortable headroom.
     _RATE_LIMIT_SLEEP = 1.2
+    _MAX_RETRIES = 5
 
     def __init__(self, token: str):
         self._client = WebClient(token=token)
         self._user_cache: Dict[str, str] = {}  # user_id → display name
+
+    def _call_with_retry(self, fn, **kwargs):
+        """Call a Slack SDK method, retrying on ratelimited errors."""
+        for attempt in range(self._MAX_RETRIES):
+            try:
+                return fn(**kwargs)
+            except SlackApiError as e:
+                if e.response.get('error') == 'ratelimited':
+                    retry_after = int(e.response.headers.get('Retry-After', 30))
+                    print(f'  Rate limited — waiting {retry_after}s before retry...')
+                    time.sleep(retry_after)
+                else:
+                    raise
+        raise RuntimeError('Exceeded max retries due to Slack rate limiting')
 
     # ------------------------------------------------------------------
     # Channels
@@ -49,7 +64,8 @@ class SlackClient:
         types = 'public_channel,private_channel' if include_private else 'public_channel'
 
         while True:
-            resp = self._client.conversations_list(
+            resp = self._call_with_retry(
+                self._client.conversations_list,
                 types=types,
                 exclude_archived=True,
                 limit=200,
@@ -145,7 +161,8 @@ class SlackClient:
         cursor = None
         while True:
             try:
-                resp = self._client.conversations_history(
+                resp = self._call_with_retry(
+                    self._client.conversations_history,
                     channel=channel_id,
                     oldest=str(oldest),
                     limit=200,
@@ -166,7 +183,8 @@ class SlackClient:
         cursor = None
         while True:
             try:
-                resp = self._client.conversations_replies(
+                resp = self._call_with_retry(
+                    self._client.conversations_replies,
                     channel=channel_id,
                     ts=thread_ts,
                     limit=200,
@@ -187,7 +205,7 @@ class SlackClient:
         if user_id in self._user_cache:
             return self._user_cache[user_id]
         try:
-            resp = self._client.users_info(user=user_id)
+            resp = self._call_with_retry(self._client.users_info, user=user_id)
             profile = resp['user'].get('profile', {})
             name = (
                 profile.get('display_name')
@@ -204,7 +222,7 @@ class SlackClient:
 
     def _channel_name(self, channel_id: str) -> str:
         try:
-            resp = self._client.conversations_info(channel=channel_id)
+            resp = self._call_with_retry(self._client.conversations_info, channel=channel_id)
             return resp['channel'].get('name', channel_id)
         except SlackApiError:
             return channel_id
