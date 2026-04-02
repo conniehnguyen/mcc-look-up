@@ -19,30 +19,35 @@ from typing import Dict, List, Optional
 
 SYSTEM_PROMPT = """\
 You are a technical documentation writer. You will be given a Slack thread.
-Your job is to decide whether the thread contains a clear question and a
-useful answer that would help future readers, and if so, extract a FAQ entry.
+Your job is to decide whether the thread is worth summarising for future readers.
+
+A thread is worth summarising if it contains:
+- A meaningful question (even without a full answer), OR
+- A meaningful question with an informative discussion or resolution.
 
 Return EXACTLY one of:
 
-  FAQ_ENTRY
-  QUESTION: <one concise sentence — the question being asked>
-  ANSWER: <clear, complete answer in plain English — 1 to 5 sentences>
+  SUMMARY
+  TITLE: <one short sentence capturing the core topic>
+  QUESTION: <the question being asked, rewritten clearly>
+  SUMMARY: <2 to 4 sentences summarising the discussion and any conclusions or next steps>
+  RESOLVED: yes | no | partial
   TAGS: <comma-separated lowercase keywords, e.g. authentication, setup, docker>
 
   or
 
-  NO_FAQ
+  SKIP
 
 Rules:
-- Return NO_FAQ if the thread is casual chat, a standup update, an emoji
-  reaction, a complaint with no resolution, or unclear.
-- Return NO_FAQ if the thread has no meaningful answer (e.g. "not sure",
-  "ask X person").
-- Rewrite the question and answer in clean, professional language — do not
-  copy Slack slang, @mentions, or emoji.
-- The answer should be self-contained: a reader should not need to read the
-  original thread to understand it.
-- If the thread contains multiple questions, extract only the primary one.
+- Return SKIP only if the thread is purely casual chat, a standup update,
+  an emoji-only reaction, or completely off-topic noise with no substance.
+- A thread with a real question but no answer is still worth summarising —
+  mark it RESOLVED: no.
+- A thread with a partial answer or ongoing discussion is RESOLVED: partial.
+- Rewrite everything in clean, professional language — strip Slack slang,
+  @mentions, and emoji.
+- The summary should be self-contained: a reader should understand the gist
+  without reading the original thread.
 """
 
 
@@ -69,39 +74,39 @@ def _format_thread(thread: Dict) -> str:
 
 def generate_faq(thread: Dict) -> Optional[Dict]:
     """
-    Analyse a single Slack thread and return a FAQ entry dict, or None if
-    the thread is not FAQ-worthy.
+    Analyse a single Slack thread and return a summary dict, or None if
+    the thread is not worth summarising.
 
     Return dict shape:
       {
+        title: str,
         question: str,
-        answer: str,
+        summary: str,
+        resolved: str,  # 'yes' | 'no' | 'partial'
         tags: [str],
         source_channel: str,
         source_date: str,
       }
     """
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types
 
         api_key = os.environ.get('GOOGLE_API_KEY')
         if not api_key:
             print('  ⚠ GOOGLE_API_KEY not set — skipping AI analysis.')
             return None
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
-            system_instruction=SYSTEM_PROMPT,
-        )
-
+        client = genai.Client(api_key=api_key)
         thread_text = _format_thread(thread)
-        response = model.generate_content(
-            f'Analyse this Slack thread and return a FAQ entry or NO_FAQ:\n\n{thread_text}'
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=f'Analyse this Slack thread and return a summary or SKIP:\n\n{thread_text}',
+            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
         )
         text = (response.text or '').strip()
 
-        if 'NO_FAQ' in text:
+        if 'SKIP' in text:
             return None
 
         return _parse_response(text, thread)
@@ -113,19 +118,23 @@ def generate_faq(thread: Dict) -> Optional[Dict]:
 
 def _parse_response(text: str, thread: Dict) -> Optional[Dict]:
     """Extract structured fields from the LLM response."""
+    title_m = re.search(r'TITLE:\s*(.+)', text)
     question_m = re.search(r'QUESTION:\s*(.+)', text)
-    answer_m = re.search(r'ANSWER:\s*(.+?)(?=\nTAGS:|\Z)', text, re.DOTALL)
+    summary_m = re.search(r'SUMMARY:\s*(.+?)(?=\nRESOLVED:|\nTAGS:|\Z)', text, re.DOTALL)
+    resolved_m = re.search(r'RESOLVED:\s*(\w+)', text)
     tags_m = re.search(r'TAGS:\s*(.+)', text)
 
-    if not question_m or not answer_m:
+    if not question_m or not summary_m:
         return None
 
     tags_raw = tags_m.group(1).strip() if tags_m else ''
     tags = [t.strip().lower() for t in tags_raw.split(',') if t.strip()]
 
     return {
+        'title': title_m.group(1).strip() if title_m else question_m.group(1).strip(),
         'question': question_m.group(1).strip(),
-        'answer': answer_m.group(1).strip(),
+        'summary': summary_m.group(1).strip(),
+        'resolved': (resolved_m.group(1).strip().lower() if resolved_m else 'unknown'),
         'tags': tags,
         'source_channel': thread['channel_name'],
         'source_date': thread['root']['timestamp'],
@@ -143,10 +152,10 @@ def deduplicate(faqs: List[Dict]) -> List[Dict]:
     """
     unique = []
     for faq in faqs:
-        words = set(faq['question'].lower().split())
+        words = set(faq['title'].lower().split())
         is_duplicate = False
         for existing in unique:
-            existing_words = set(existing['question'].lower().split())
+            existing_words = set(existing['title'].lower().split())
             overlap = len(words & existing_words) / max(len(words | existing_words), 1)
             if overlap > 0.7:  # 70% word overlap → treat as duplicate
                 is_duplicate = True

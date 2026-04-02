@@ -1,29 +1,36 @@
 """
 Markdown exporter.
 
-Writes FAQ entries to a markdown file suitable for dropping into a doc site.
-FAQs are grouped by channel and sorted alphabetically within each group.
+Writes conversation summaries to a markdown file suitable for dropping into a doc site.
+Summaries are grouped by channel and sorted alphabetically by title within each group.
 """
 
 import os
 from datetime import datetime
 from typing import Dict, List
 
+_RESOLVED_LABEL = {
+    'yes': 'Resolved',
+    'no': 'Unresolved',
+    'partial': 'Partially resolved',
+    'unknown': '',
+}
+
 
 def export_markdown(faqs: List[Dict], output_path: str, site_name: str = '') -> int:
     """
-    Write FAQ entries to a markdown file.
+    Write conversation summaries to a markdown file.
 
     Parameters
     ----------
-    faqs : list of FAQ dicts (from faq_generator.generate_faq)
+    faqs : list of summary dicts (from faq_generator.generate_faq)
     output_path : path to write the .md file
     site_name : optional site name used in the file header
 
-    Returns the number of FAQ entries written.
+    Returns the number of entries written.
     """
     if not faqs:
-        print('No FAQ entries to export.')
+        print('No summaries to export.')
         return 0
 
     # Group by channel
@@ -32,9 +39,9 @@ def export_markdown(faqs: List[Dict], output_path: str, site_name: str = '') -> 
         ch = faq['source_channel']
         by_channel.setdefault(ch, []).append(faq)
 
-    # Sort each channel's FAQs alphabetically by question
+    # Sort each channel's entries alphabetically by title
     for ch in by_channel:
-        by_channel[ch].sort(key=lambda f: f['question'].lower())
+        by_channel[ch].sort(key=lambda f: f['title'].lower())
 
     lines = _build_markdown(by_channel, site_name)
 
@@ -43,7 +50,7 @@ def export_markdown(faqs: List[Dict], output_path: str, site_name: str = '') -> 
         f.write('\n'.join(lines))
 
     total = sum(len(v) for v in by_channel.values())
-    print(f'Wrote {total} FAQ entries to {output_path}')
+    print(f'Wrote {total} conversation summaries to {output_path}')
     return total
 
 
@@ -51,7 +58,7 @@ def _build_markdown(by_channel: Dict[str, List[Dict]], site_name: str) -> List[s
     generated = datetime.utcnow().strftime('%Y-%m-%d')
     title = f'{site_name} — ' if site_name else ''
     lines = [
-        f'# {title}Frequently Asked Questions',
+        f'# {title}Slack Conversation Summaries',
         '',
         f'*Generated from Slack on {generated}. Review before publishing.*',
         '',
@@ -63,25 +70,33 @@ def _build_markdown(by_channel: Dict[str, List[Dict]], site_name: str) -> List[s
     for ch in sorted(by_channel):
         anchor = ch.lower().replace(' ', '-').replace('_', '-')
         count = len(by_channel[ch])
-        lines.append(f'- [{ch}](#{anchor}) ({count} {"entry" if count == 1 else "entries"})')
+        lines.append(f'- [{ch}](#{anchor}) ({count} {"thread" if count == 1 else "threads"})')
     lines.append('')
     lines.append('---')
     lines.append('')
 
-    # FAQ sections per channel
+    # Summary sections per channel
     for ch in sorted(by_channel):
         lines.append(f'## {ch}')
         lines.append('')
-        for faq in by_channel[ch]:
-            lines.append(f"### {faq['question']}")
+        for entry in by_channel[ch]:
+            lines.append(f"### {entry['title']}")
             lines.append('')
-            lines.append(faq['answer'])
+            lines.append(f"**Q:** {entry['question']}")
             lines.append('')
-            if faq.get('tags'):
-                tag_str = ' '.join(f'`{t}`' for t in faq['tags'])
-                lines.append(f'**Tags:** {tag_str}')
+            lines.append(entry['summary'])
+            lines.append('')
+            resolved_label = _RESOLVED_LABEL.get(entry.get('resolved', ''), '')
+            meta_parts = []
+            if resolved_label:
+                meta_parts.append(resolved_label)
+            if entry.get('tags'):
+                tag_str = ' '.join(f'`{t}`' for t in entry['tags'])
+                meta_parts.append(f'Tags: {tag_str}')
+            if meta_parts:
+                lines.append(' · '.join(meta_parts))
                 lines.append('')
-            lines.append(f'*Source: #{faq["source_channel"]} · {faq["source_date"]}*')
+            lines.append(f'*Source: #{entry["source_channel"]} · {entry["source_date"]}*')
             lines.append('')
             lines.append('---')
             lines.append('')
