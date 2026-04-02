@@ -102,6 +102,56 @@ class SlackClient:
     # Threads
     # ------------------------------------------------------------------
 
+    def get_all_messages(self, channel_id: str, days: int = 30) -> List[Dict]:
+        """
+        Fetch every message from a channel (threaded and standalone) within
+        the last `days` days, in chronological order.
+
+        Returns a list of conversation dicts:
+          {
+            channel_id, channel_name,
+            ts,
+            root: {author, text, timestamp},
+            replies: [{author, text, timestamp}, ...]  # empty for standalone messages
+          }
+        """
+        oldest = (datetime.utcnow() - timedelta(days=days)).timestamp()
+        messages = self._fetch_history(channel_id, oldest)
+        channel_name = self._channel_name(channel_id)
+
+        # Sort chronologically (API returns newest-first)
+        messages.sort(key=lambda m: float(m['ts']))
+
+        conversations = []
+        for msg in messages:
+            replies = []
+            if int(msg.get('reply_count', 0)) > 0:
+                raw_replies = self._fetch_replies(channel_id, msg['ts'])
+                replies = [
+                    {
+                        'author': self._user_name(r.get('user', '')),
+                        'text': r.get('text', ''),
+                        'timestamp': self._format_ts(r['ts']),
+                    }
+                    for r in raw_replies
+                    if r['ts'] != msg['ts']  # exclude root from replies list
+                ]
+                time.sleep(self._RATE_LIMIT_SLEEP)
+
+            conversations.append({
+                'channel_id': channel_id,
+                'channel_name': channel_name,
+                'ts': msg['ts'],
+                'root': {
+                    'author': self._user_name(msg.get('user', '')),
+                    'text': msg.get('text', ''),
+                    'timestamp': self._format_ts(msg['ts']),
+                },
+                'replies': replies,
+            })
+
+        return conversations
+
     def get_threads(self, channel_id: str, days: int = 30) -> List[Dict]:
         """
         Fetch all threads (messages with at least one reply) from a channel

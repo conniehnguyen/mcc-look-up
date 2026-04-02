@@ -9,6 +9,58 @@ import os
 from datetime import datetime
 from typing import Dict, List
 
+def export_raw_markdown(conversations: List[Dict], output_path: str) -> int:
+    """
+    Write all conversations to a readable markdown file with no AI processing.
+    Suitable for pasting into Claude, Gemini, or any other AI for manual review.
+
+    Returns the number of conversations written.
+    """
+    if not conversations:
+        print('No conversations to export.')
+        return 0
+
+    generated = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+    channel_name = conversations[0]['channel_name'] if conversations else 'unknown'
+
+    lines = [
+        f'# #{channel_name} — Slack Export',
+        '',
+        f'*Exported {generated} · {len(conversations)} message(s)*',
+        '',
+        '---',
+        '',
+    ]
+
+    for i, convo in enumerate(conversations, 1):
+        root = convo['root']
+        has_replies = bool(convo['replies'])
+        header = f'## [{i}] {root["timestamp"]} · {root["author"]}'
+        if has_replies:
+            header += f' · {len(convo["replies"])} repl{"y" if len(convo["replies"]) == 1 else "ies"}'
+        lines.append(header)
+        lines.append('')
+        lines.append(root['text'] or '*(empty)*')
+        lines.append('')
+
+        if has_replies:
+            for reply in convo['replies']:
+                lines.append(f'> **{reply["author"]}** _{reply["timestamp"]}_')
+                lines.append(f'> {reply["text"]}')
+                lines.append('>')
+            lines.append('')
+
+        lines.append('---')
+        lines.append('')
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+
+    print(f'Wrote {len(conversations)} conversation(s) to {output_path}')
+    return len(conversations)
+
+
 _RESOLVED_LABEL = {
     'yes': 'Resolved',
     'no': 'Unresolved',

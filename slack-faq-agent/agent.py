@@ -24,7 +24,7 @@ import sys
 
 from slack_client import SlackClient
 from faq_generator import generate_faq, deduplicate
-from exporter import export_markdown
+from exporter import export_markdown, export_raw_markdown
 
 # ---------------------------------------------------------------------------
 # Configuration — set these as environment variables, never hardcode values
@@ -45,6 +45,50 @@ DEFAULT_OUTPUT = 'output/faqs.md'
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+
+def run_raw(
+    channels: list[str],
+    days: int,
+    output_path: str,
+    include_private: bool,
+) -> None:
+    """Export all conversations to markdown without AI processing."""
+    if not SLACK_BOT_TOKEN:
+        print('\n⚠ SLACK_BOT_TOKEN is not set.\n'
+              '  export SLACK_BOT_TOKEN="xoxb-your-token-here"\n')
+        sys.exit(1)
+
+    client = SlackClient(SLACK_BOT_TOKEN)
+
+    print(f'\nResolving {len(channels)} channel(s)...')
+    channel_ids = []
+    for name in channels:
+        cid = client.resolve_channel_id(name.lstrip('#'))
+        if cid:
+            channel_ids.append((name.lstrip('#'), cid))
+            print(f'  ✓ #{name.lstrip("#")} → {cid}')
+        else:
+            print(f'  ✗ #{name.lstrip("#")} not found — check the name and that the bot is invited')
+
+    if not channel_ids:
+        print('\nNo valid channels found. Exiting.')
+        sys.exit(1)
+
+    all_conversations = []
+    for ch_name, ch_id in channel_ids:
+        print(f'\nFetching all messages from #{ch_name} (last {days} days)...')
+        convos = client.get_all_messages(ch_id, days=days)
+        print(f'  Found {len(convos)} message(s)')
+        all_conversations.extend(convos)
+
+    if not all_conversations:
+        print('\nNo messages found in the specified channels and time range.')
+        sys.exit(0)
+
+    print(f'\nExporting to {output_path}...')
+    export_raw_markdown(all_conversations, output_path)
+    print('\nDone. Open the file and paste into Claude or Gemini for summarisation.')
+
 
 def run(
     channels: list[str],
@@ -183,6 +227,11 @@ def main() -> None:
         action='store_true',
         help='Print all channels the bot can see and exit',
     )
+    parser.add_argument(
+        '--raw',
+        action='store_true',
+        help='Export all conversations as readable markdown without AI processing',
+    )
 
     args = parser.parse_args()
 
@@ -194,12 +243,21 @@ def main() -> None:
         parser.error('--channels is required unless --list-channels is used')
 
     channels = [c.strip() for c in args.channels.split(',') if c.strip()]
-    run(
-        channels=channels,
-        days=args.days,
-        output_path=args.output,
-        include_private=args.include_private,
-    )
+
+    if args.raw:
+        run_raw(
+            channels=channels,
+            days=args.days,
+            output_path=args.output,
+            include_private=args.include_private,
+        )
+    else:
+        run(
+            channels=channels,
+            days=args.days,
+            output_path=args.output,
+            include_private=args.include_private,
+        )
 
 
 if __name__ == '__main__':
